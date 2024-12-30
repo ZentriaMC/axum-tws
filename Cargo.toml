@@ -23,5 +23,16 @@ http = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
 sha1 = "0.10"
-tokio = { version = "1", default-features = false }
+tokio = { version = "1", default-features = false, features = ["macros"]}
 tokio-websockets = { version = "0.10", features = ["server", "ring"] }
+
+[dev-dependencies]
+axum = { version = "0.7.9", default-features = false, features = ["http1", "tokio"]}
+http-body-util = "0.1.2"
+hyper = { version = "1", features = ["client"] }
+tokio-websockets = { version = "0.10", features = ["client", "server", "rand", "ring"] }
+tower = "0.5.2"
+
+[features]
+default = ["http2"]
+http2 = ["axum/http2", "hyper/http2"]
