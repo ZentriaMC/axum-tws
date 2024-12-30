@@ -22,6 +22,10 @@ impl WebSocket {
         Self { inner, protocol }
     }
 
+    pub fn into_inner(self) -> WebSocketStream<TokioIo<Upgraded>> {
+        self.inner
+    }
+
     /// Receive the next message from the connection.
     pub async fn recv(&mut self) -> Option<Result<Message, WebSocketError>> {
         self.next().await
