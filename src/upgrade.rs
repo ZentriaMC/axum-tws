@@ -64,7 +64,8 @@ where
     type Rejection = WebSocketError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let sec_websocket_key = if parts.version <= Version::HTTP_11 {
+        let sec_websocket_key = if parts.version <= Version::HTTP_11 || cfg!(not(feature = "http2"))
+        {
             if parts.method != Method::GET {
                 return Err(WebSocketError::MethodNotGet);
             }
