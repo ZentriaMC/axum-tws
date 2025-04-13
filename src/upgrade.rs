@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::future::Future;
 
 use axum_core::body::Body;
@@ -133,6 +134,35 @@ impl<F> WebSocketUpgrade<F> {
 
     pub fn limits(mut self, limits: Limits) -> Self {
         self.limits = limits;
+        self
+    }
+
+    pub fn protocols<I>(mut self, protocols: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: Into<Cow<'static, str>>,
+    {
+        if let Some(req_protocols) = self
+            .sec_websocket_protocol
+            .as_ref()
+            .and_then(|p| p.to_str().ok())
+        {
+            self.protocol = protocols
+                .into_iter()
+                // FIXME: This will often allocate a new `String` and so is less efficient than it
+                // could be. But that can't be fixed without breaking changes to the public API.
+                .map(Into::into)
+                .find(|protocol| {
+                    req_protocols
+                        .split(',')
+                        .any(|req_protocol| req_protocol.trim() == protocol)
+                })
+                .map(|protocol| match protocol {
+                    Cow::Owned(s) => HeaderValue::from_str(&s).unwrap(),
+                    Cow::Borrowed(s) => HeaderValue::from_static(s),
+                });
+        }
+
         self
     }
 
