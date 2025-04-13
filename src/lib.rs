@@ -189,12 +189,17 @@ mod tests {
     async fn integration_test() {
         let addr = spawn_service().await;
 
-        let (socket, _response) =
+        let (socket, response) =
             tokio_websockets::ClientBuilder::from_uri(format!("ws://{addr}/echo").parse().unwrap())
+                .add_header(
+                    http::header::SEC_WEBSOCKET_PROTOCOL,
+                    TEST_ECHO_APP_REQ_SUBPROTO.try_into().unwrap(),
+                )
+                .unwrap()
                 .connect()
                 .await
                 .unwrap();
-        test_echo_app(socket).await;
+        test_echo_app(socket, response.headers()).await;
     }
 
     #[tokio::test]
@@ -227,6 +232,10 @@ mod tests {
             .extension(hyper::ext::Protocol::from_static("websocket"))
             .uri("/echo")
             .header("sec-websocket-version", "13")
+            .header(
+                http::header::SEC_WEBSOCKET_PROTOCOL,
+                TEST_ECHO_APP_REQ_SUBPROTO,
+            )
             .header("Host", "server.example.com")
             .body(Body::empty())
             .unwrap();
@@ -238,11 +247,12 @@ mod tests {
             let body = std::str::from_utf8(&body).unwrap();
             panic!("response status was {status}: {body}");
         }
+        let headers = response.headers().clone();
         let upgraded = hyper::upgrade::on(response).await.unwrap();
         let upgraded = TokioIo::new(upgraded);
 
         let socket = ClientBuilder::new().take_over(upgraded);
-        test_echo_app(socket).await;
+        test_echo_app(socket, &headers).await;
     }
 
     fn echo_app() -> Router {
@@ -260,11 +270,19 @@ mod tests {
 
         Router::new().route(
             "/echo",
-            any(|ws: WebSocketUpgrade| ready(ws.on_upgrade(handle_socket))),
+            any(|ws: WebSocketUpgrade| {
+                ready(ws.protocols(["echo2", "echo"]).on_upgrade(handle_socket))
+            }),
         )
     }
 
-    async fn test_echo_app<S: AsyncRead + AsyncWrite + Unpin>(mut socket: WebSocketStream<S>) {
+    const TEST_ECHO_APP_REQ_SUBPROTO: &str = "echo3, echo";
+    async fn test_echo_app<S: AsyncRead + AsyncWrite + Unpin>(
+        mut socket: WebSocketStream<S>,
+        headers: &http::HeaderMap,
+    ) {
+        assert_eq!(headers[http::header::SEC_WEBSOCKET_PROTOCOL], "echo");
+
         let input = Message::text("foobar");
         socket.send(input.clone()).await.unwrap();
 
